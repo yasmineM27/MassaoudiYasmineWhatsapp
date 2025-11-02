@@ -30,12 +30,11 @@ export default function App() {
         />
 
         {/* Home Screen */}
-        <Stack.Screen 
-          name="Home" 
-          component={Home} 
-          options={{ title: 'Home', headerShown: false }} 
-        />
-
+       <Stack.Screen
+  name="Home"
+  component={Home}
+  options={{ headerShown: false }} 
+/>
         {/* Home Subscreens */}
         <Stack.Screen 
           name="MyAccount" 

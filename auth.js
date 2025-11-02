@@ -14,12 +14,11 @@ export default function Auth({ navigation }) {
 
         {/* Zone semi-transparente pour les champs */}
         <View style={[styles.blurContainer, { backgroundColor: 'rgba(255,255,255,0.6)' }]}>
+          <Text style={styles.title}>Welcome !!</Text>
           <TextInput placeholder="email@site.com" style={styles.input} />
           <TextInput placeholder="** password **" style={styles.input} secureTextEntry />
-        </View>
-
-        <View style={styles.box}>
-          <Text style={styles.title}>Welcome !!</Text>
+       <View style={styles.box}>
+          
 
           <View style={styles.buttonRow}>
             <View style={styles.buttonContainer}>
@@ -30,6 +29,8 @@ export default function Auth({ navigation }) {
             </View>
           </View>
         </View>
+
+         </View>
 
         <Text style={styles.footer} onPress={() => navigation.navigate('Register')}>
           create new user

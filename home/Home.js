@@ -1,20 +1,28 @@
 // home/Home.js
 import React from 'react';
-import { View, Text, Button, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
-export default function Home({ navigation }) {
+import MyAccount from './MyAccount';
+import Group from './Group';
+import List from './List';
+
+const Tab = createBottomTabNavigator();
+
+export default function Home() {
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}> Home</Text>
+    <Tab.Navigator
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: 'green',
+        tabBarInactiveTintColor: 'gray',
+        tabBarStyle: { height: 60, paddingBottom: 5 },
+      }}
+    >
+      <Tab.Screen name="Group" component={Group} options={{ tabBarLabel: 'Group' }} />
+      <Tab.Screen name="List" component={List} options={{ tabBarLabel: 'List' }} />
+     <Tab.Screen name="MyAccount" component={MyAccount} options={{ tabBarLabel: 'Account' }} />
 
-      <Button title="My Account" onPress={() => navigation.navigate('MyAccount')} />
-      <Button title="Group" onPress={() => navigation.navigate('Group')} />
-      <Button title="List" onPress={() => navigation.navigate('List')} />
-    </View>
+    </Tab.Navigator>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: 24, marginBottom: 20 },
-});
