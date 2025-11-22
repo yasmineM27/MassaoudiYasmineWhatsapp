@@ -8,6 +8,7 @@ import Home from './home/Home';
 import MyAccount from './home/MyAccount';
 import Group from './home/Group';
 import List from './home/List';
+import Chat from './home/Chat';
 
 const Stack = createNativeStackNavigator();
 
@@ -46,10 +47,20 @@ export default function App() {
           component={Group} 
           options={{ title: 'Group' }} 
         />
-        <Stack.Screen 
-          name="List" 
-          component={List} 
-          options={{ title: 'List' }} 
+        <Stack.Screen
+          name="List"
+          component={List}
+          options={{ title: 'List' }}
+        />
+        <Stack.Screen
+          name="Chat"
+          component={Chat}
+          options={{
+            title: 'Chat',
+            headerStyle: { backgroundColor: '#128C7E' },
+            headerTintColor: 'white',
+            headerTitleStyle: { fontWeight: 'bold' }
+          }}
         />
       </Stack.Navigator>
     </NavigationContainer>

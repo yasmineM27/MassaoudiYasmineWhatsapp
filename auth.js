@@ -1,11 +1,63 @@
 // auth.js
-import React from 'react';
-import { View, Text, TextInput, Button, StyleSheet, StatusBar, Image, ImageBackground } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TextInput, Button, StyleSheet, StatusBar, Image, ImageBackground, Alert, ActivityIndicator } from 'react-native';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from './firebaseConfig';
 
 export default function Auth({ navigation }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async () => {
+    // Validation
+    if (!email || !password) {
+      Alert.alert('Erreur', 'Veuillez remplir tous les champs');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Connexion avec Firebase Authentication
+      await signInWithEmailAndPassword(auth, email, password);
+
+      Alert.alert('Succès', 'Connexion réussie!', [
+        { text: 'OK', onPress: () => navigation.navigate('Home') }
+      ]);
+    } catch (error) {
+      console.error('Erreur de connexion:', error);
+      let errorMessage = 'Une erreur est survenue';
+
+      switch (error.code) {
+        case 'auth/invalid-email':
+          errorMessage = 'Email invalide';
+          break;
+        case 'auth/user-disabled':
+          errorMessage = 'Ce compte a été désactivé';
+          break;
+        case 'auth/user-not-found':
+          errorMessage = 'Aucun compte trouvé avec cet email';
+          break;
+        case 'auth/wrong-password':
+          errorMessage = 'Mot de passe incorrect';
+          break;
+        case 'auth/invalid-credential':
+          errorMessage = 'Email ou mot de passe incorrect';
+          break;
+        default:
+          errorMessage = error.message;
+      }
+
+      Alert.alert('Erreur', errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <ImageBackground 
-      source={require('./assets/background.png')}  
+    <ImageBackground
+      source={require('./assets/background.png')}
       style={styles.background}
       resizeMode="cover"
     >
@@ -15,22 +67,38 @@ export default function Auth({ navigation }) {
         {/* Zone semi-transparente pour les champs */}
         <View style={[styles.blurContainer, { backgroundColor: 'rgba(255,255,255,0.6)' }]}>
           <Text style={styles.title}>Welcome !!</Text>
-          <TextInput placeholder="email@site.com" style={styles.input} />
-          <TextInput placeholder="** password **" style={styles.input} secureTextEntry />
-       <View style={styles.box}>
-          
-
-          <View style={styles.buttonRow}>
-            <View style={styles.buttonContainer}>
-              <Button title="Submit" color="green" onPress={() => navigation.navigate('Home')} />
-            </View>
-            <View style={styles.buttonContainer}>
-              <Button title="Exit" color="green" onPress={() => alert('Exited!')} />
-            </View>
+          <TextInput
+            placeholder="email@site.com"
+            style={styles.input}
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            editable={!loading}
+          />
+          <TextInput
+            placeholder="** password **"
+            style={styles.input}
+            secureTextEntry
+            value={password}
+            onChangeText={setPassword}
+            editable={!loading}
+          />
+          <View style={styles.box}>
+            {loading ? (
+              <ActivityIndicator size="large" color="green" style={{ marginVertical: 20 }} />
+            ) : (
+              <View style={styles.buttonRow}>
+                <View style={styles.buttonContainer}>
+                  <Button title="Submit" color="green" onPress={handleLogin} />
+                </View>
+                <View style={styles.buttonContainer}>
+                  <Button title="Exit" color="green" onPress={() => Alert.alert('Exit', 'Au revoir!')} />
+                </View>
+              </View>
+            )}
           </View>
         </View>
-
-         </View>
 
         <Text style={styles.footer} onPress={() => navigation.navigate('Register')}>
           create new user
