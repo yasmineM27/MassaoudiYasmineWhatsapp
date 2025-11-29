@@ -11,116 +11,240 @@ import {
   RefreshControl,
   Alert
 } from 'react-native';
-import { auth, db } from '../firebaseConfig';
-import { collection, query, where, onSnapshot, orderBy, doc, getDoc, deleteDoc } from 'firebase/firestore';
+import { auth, realtimeDb, db } from '../firebaseConfig';
+import { ref, onValue, remove } from 'firebase/database';
+import { doc, getDoc } from 'firebase/firestore';
 
 export default function Group({ navigation }) {
   const [conversations, setConversations] = useState([]);
+  const [groups, setGroups] = useState([]);
+  const [combinedList, setCombinedList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadedChats, setLoadedChats] = useState(false);
+  const [loadedGroups, setLoadedGroups] = useState(false);
   const currentUser = auth.currentUser;
 
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser) {
+      setLoading(false);
+      return;
+    }
 
-    loadConversations();
+    const unsubscribeChats = loadConversations();
+    const unsubscribeGroups = loadGroups();
+
+    return () => {
+      if (unsubscribeChats) unsubscribeChats();
+      if (unsubscribeGroups) unsubscribeGroups();
+    };
   }, []);
 
-  const loadConversations = async () => {
+  useEffect(() => {
+    if (loadedChats && loadedGroups) {
+      setLoading(false);
+    }
+  }, [loadedChats, loadedGroups]);
+
+  useEffect(() => {
+    const combined = [...conversations, ...groups];
+    combined.sort((a, b) => b.lastMessageTime - a.lastMessageTime);
+    setCombinedList(combined);
+  }, [conversations, groups]);
+
+  const loadConversations = () => {
     try {
-      const conversationsRef = collection(db, 'conversations');
-      const q = query(
-        conversationsRef,
-        where('participants', 'array-contains', currentUser.uid),
-        orderBy('lastMessageTime', 'desc')
-      );
+      const chatsRef = ref(realtimeDb, 'chats');
+      console.log(' Chargement conversations...');
 
-      const unsubscribe = onSnapshot(q, async (snapshot) => {
-        const convList = [];
+      const unsubscribe = onValue(chatsRef, async (snapshot) => {
+        try {
+          const convList = [];
+          const data = snapshot.val();
 
-        for (const docSnap of snapshot.docs) {
-          const convData = docSnap.data();
-          const otherUserId = convData.participants.find(id => id !== currentUser.uid);
+          if (data) {
+            for (const chatId of Object.keys(data)) {
+              if (chatId.includes(currentUser.uid)) {
+                const chatData = data[chatId];
+                const userIds = chatId.split('_');
+                const otherUserId = userIds.find(id => id !== currentUser.uid);
 
-          // Récupérer les infos de l'autre utilisateur
-          const userDoc = await getDoc(doc(db, 'users', otherUserId));
-          const userData = userDoc.exists() ? userDoc.data() : {};
+                if (!otherUserId) continue;
 
-          convList.push({
-            id: docSnap.id,
-            ...convData,
-            otherUserId,
-            otherUserName: userData.name || userData.pseudo || 'Utilisateur',
-            otherUserImage: userData.imageUrl,
-            otherUserPseudo: userData.pseudo
-          });
+                const userDoc = await getDoc(doc(db, 'users', otherUserId));
+                const userData = userDoc.exists() ? userDoc.data() : {};
+
+                let lastMessage = '';
+                let lastMessageTime = 0;
+
+                if (chatData.messages) {
+                  const messages = Object.values(chatData.messages);
+                  if (messages.length > 0) {
+                    messages.sort((a, b) => b.time - a.time);
+                    const lastMsg = messages[0];
+                    lastMessage = lastMsg.type === 'location' ? '📍 Position' : lastMsg.msg;
+                    lastMessageTime = lastMsg.time;
+                  }
+                }
+
+                convList.push({
+                  id: chatId,
+                  type: 'chat',
+                  otherUserId,
+                  otherUserName: userData.name || userData.pseudo || 'Utilisateur',
+                  otherUserImage: userData.imageUrl,
+                  otherUserPseudo: userData.pseudo,
+                  lastMessage,
+                  lastMessageTime
+                });
+              }
+            }
+          }
+
+          console.log(` ${convList.length} conversations chargées`);
+          setConversations(convList);
+          setLoadedChats(true);
+        } catch (error) {
+          console.error(' Erreur conversations:', error);
+          setConversations([]);
+          setLoadedChats(true);
         }
-
-        setConversations(convList);
-        setLoading(false);
+      }, (error) => {
+        console.error(' Erreur listener conversations:', error);
+        setConversations([]);
+        setLoadedChats(true);
       });
 
       return unsubscribe;
     } catch (error) {
-      console.error('Erreur chargement conversations:', error);
-      setLoading(false);
+      console.error(' Erreur chargement conversations:', error);
+      setConversations([]);
+      setLoadedChats(true);
+      return null;
+    }
+  };
+
+  const loadGroups = () => {
+    try {
+      const groupsRef = ref(realtimeDb, 'groups');
+      console.log(' Chargement groupes...');
+
+      const unsubscribe = onValue(groupsRef, async (snapshot) => {
+        try {
+          const groupsList = [];
+          const data = snapshot.val();
+
+          if (data) {
+            for (const groupId of Object.keys(data)) {
+              const groupData = data[groupId];
+
+              if (groupData.members && groupData.members.includes(currentUser.uid)) {
+                groupsList.push({
+                  id: groupId,
+                  type: 'group',
+                  groupName: groupData.name,
+                  memberCount: groupData.members.length,
+                  lastMessage: groupData.lastMessage || '',
+                  lastMessageTime: groupData.lastMessageTime || 0
+                });
+              }
+            }
+          }
+
+          console.log(` ${groupsList.length} groupes chargés`);
+          setGroups(groupsList);
+          setLoadedGroups(true);
+        } catch (error) {
+          console.error(' Erreur groupes:', error);
+          setGroups([]);
+          setLoadedGroups(true);
+        }
+      }, (error) => {
+        console.error(' Erreur listener groupes:', error);
+        setGroups([]);
+        setLoadedGroups(true);
+      });
+
+      return unsubscribe;
+    } catch (error) {
+      console.error(' Erreur chargement groupes:', error);
+      setGroups([]);
+      setLoadedGroups(true);
+      return null;
     }
   };
 
   const formatTime = (timestamp) => {
     if (!timestamp) return '';
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    const date = new Date(timestamp);
     const now = new Date();
     const diff = now - date;
 
-    if (diff < 86400000) { // Moins de 24h
+    if (diff < 86400000) {
       return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-    } else if (diff < 604800000) { // Moins d'une semaine
+    } else if (diff < 604800000) {
       return date.toLocaleDateString('fr-FR', { weekday: 'short' });
     } else {
       return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
     }
   };
 
-  const handleConversationPress = (conv) => {
-    navigation.navigate('Chat', {
-      userId: conv.otherUserId,
-      userName: conv.otherUserName,
-      userImage: conv.otherUserImage,
-      userPseudo: conv.otherUserPseudo
-    });
+  const handleConversationPress = (item) => {
+    if (item.type === 'group') {
+      navigation.navigate('GroupChat', {
+        groupId: item.id,
+        groupName: item.groupName
+      });
+    } else {
+      navigation.navigate('Chat', {
+        userId: item.otherUserId,
+        userName: item.otherUserName,
+        userImage: item.otherUserImage,
+        userPseudo: item.otherUserPseudo
+      });
+    }
   };
 
-  const handleDeleteConversation = (conv) => {
-    Alert.alert(
-      'Supprimer la conversation',
-      `Voulez-vous supprimer la conversation avec ${conv.otherUserName} ?`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteDoc(doc(db, 'conversations', conv.id));
-              Alert.alert('Succès', 'Conversation supprimée');
-            } catch (error) {
-              console.error('Erreur suppression:', error);
-              Alert.alert('Erreur', 'Impossible de supprimer la conversation');
+  const handleDeleteConversation = (item) => {
+    const title = item.type === 'group' ? 'Supprimer le groupe' : 'Supprimer la conversation';
+    const message = item.type === 'group'
+      ? `Voulez-vous supprimer le groupe "${item.groupName}" ?`
+      : `Voulez-vous supprimer la conversation avec ${item.otherUserName} ?`;
+
+    Alert.alert(title, message, [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Supprimer',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            if (item.type === 'group') {
+              const groupRef = ref(realtimeDb, `groups/${item.id}`);
+              await remove(groupRef);
+            } else {
+              const chatRef = ref(realtimeDb, `chats/${item.id}`);
+              await remove(chatRef);
             }
+            Alert.alert('Succès', 'Supprimé avec succès');
+          } catch (error) {
+            console.error('Erreur suppression:', error);
+            Alert.alert('Erreur', 'Impossible de supprimer');
           }
         }
-      ]
-    );
+      }
+    ]);
   };
 
-  const onRefresh = async () => {
+  const onRefresh = () => {
     setRefreshing(true);
-    await loadConversations();
-    setRefreshing(false);
+    loadConversations();
+    loadGroups();
+    setTimeout(() => setRefreshing(false), 1000);
   };
 
   const renderConversation = ({ item }) => {
+    const isGroup = item.type === 'group';
+
     return (
       <TouchableOpacity
         style={styles.conversationCard}
@@ -129,12 +253,16 @@ export default function Group({ navigation }) {
         activeOpacity={0.7}
       >
         <View style={styles.avatarContainer}>
-          {item.otherUserImage ? (
+          {isGroup ? (
+            <View style={styles.groupAvatarPlaceholder}>
+              <Text style={styles.groupAvatarText}>👥</Text>
+            </View>
+          ) : item.otherUserImage ? (
             <Image source={{ uri: item.otherUserImage }} style={styles.avatar} />
           ) : (
             <View style={styles.avatarPlaceholder}>
               <Text style={styles.avatarText}>
-                {item.otherUserName.charAt(0).toUpperCase()}
+                {item.otherUserName?.charAt(0).toUpperCase() || '?'}
               </Text>
             </View>
           )}
@@ -143,10 +271,14 @@ export default function Group({ navigation }) {
         <View style={styles.conversationInfo}>
           <View style={styles.conversationHeader}>
             <View style={styles.userNameContainer}>
-              <Text style={styles.userName}>{item.otherUserName}</Text>
-              {item.otherUserPseudo && (
+              <Text style={styles.userName}>
+                {isGroup ? item.groupName : item.otherUserName}
+              </Text>
+              {isGroup ? (
+                <Text style={styles.userPseudo}>{item.memberCount} membres</Text>
+              ) : item.otherUserPseudo ? (
                 <Text style={styles.userPseudo}>@{item.otherUserPseudo}</Text>
-              )}
+              ) : null}
             </View>
             <Text style={styles.time}>{formatTime(item.lastMessageTime)}</Text>
           </View>
@@ -172,24 +304,32 @@ export default function Group({ navigation }) {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <Text style={styles.headerTitle}>Conversations</Text>
-          <Text style={styles.headerCount}>{conversations.length}</Text>
+          <Text style={styles.headerCount}>{combinedList.length}</Text>
         </View>
         <Text style={styles.headerSubtitle}>
           Appuyez longuement pour supprimer
         </Text>
       </View>
 
-      {conversations.length === 0 ? (
+      <TouchableOpacity
+        style={styles.createGroupButton}
+        onPress={() => navigation.navigate('CreateGroup')}
+      >
+        <Text style={styles.createGroupIcon}>➕</Text>
+        <Text style={styles.createGroupText}>Créer un groupe</Text>
+      </TouchableOpacity>
+
+      {combinedList.length === 0 ? (
         <View style={styles.centerContainer}>
           <Text style={styles.emptyIcon}>💬</Text>
           <Text style={styles.emptyText}>Aucune conversation</Text>
           <Text style={styles.emptySubtext}>
-            Commencez une conversation depuis l'onglet List
+            Commencez une conversation depuis l'onglet List ou créez un groupe
           </Text>
         </View>
       ) : (
         <FlatList
-          data={conversations}
+          data={combinedList}
           renderItem={renderConversation}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContainer}
@@ -288,6 +428,17 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: 'white',
   },
+  groupAvatarPlaceholder: {
+    width: 55,
+    height: 55,
+    borderRadius: 27.5,
+    backgroundColor: '#25D366',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  groupAvatarText: {
+    fontSize: 28,
+  },
   conversationInfo: {
     flex: 1,
   },
@@ -332,5 +483,28 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#999',
     textAlign: 'center',
+  },
+  createGroupButton: {
+    backgroundColor: '#25D366',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 15,
+    margin: 10,
+    borderRadius: 8,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  createGroupIcon: {
+    fontSize: 20,
+    marginRight: 10,
+  },
+  createGroupText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });

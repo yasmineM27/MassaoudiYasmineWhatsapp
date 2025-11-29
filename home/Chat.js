@@ -36,39 +36,65 @@ export default function Chat({ route, navigation }) {
   // Créer un ID de conversation unique (toujours dans le même ordre)
   const conversationId = [currentUser.uid, userId].sort().join('_');
 
-  useEffect(() => {
-    navigation.setOptions({
-      headerTitle: () => (
-        <View style={styles.headerTitleContainer}>
-          {userImage ? (
-            <Image source={{ uri: userImage }} style={styles.headerAvatar} />
-          ) : (
-            <View style={styles.headerAvatarPlaceholder}>
-              <Text style={styles.headerAvatarText}>
-                {userName.charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          )}
-          <View>
-            <Text style={styles.headerName}>{userName}</Text>
-            {userPseudo && <Text style={styles.headerPseudo}>@{userPseudo}</Text>}
-          </View>
-        </View>
-      ),
-      headerRight: () => (
-        <View style={styles.headerButtons}>
-          <TouchableOpacity onPress={handleVideoCall} style={styles.headerButton}>
-            <Text style={styles.headerButtonText}>vd</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={handleVoiceCall} style={styles.headerButton}>
-            <Text style={styles.headerButtonText}>appel</Text>
-          </TouchableOpacity>
-        </View>
-      ),
-    });
+  const onVoiceCallPress = () => {
+    Alert.alert(
+      'Appel vocal',
+      `Appeler ${userName} ?`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Appeler', onPress: () => console.log('Appel vocal vers', userName) }
+      ]
+    );
+  };
 
-    loadMessages();
-  }, []);
+  const onVideoCallPress = () => {
+    Alert.alert(
+      'Appel vidéo',
+      `Appeler ${userName} en vidéo ?`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Appeler', onPress: () => console.log('Appel vidéo vers', userName) }
+      ]
+    );
+  };
+useEffect(() => {
+  navigation.setOptions({
+    headerTitle: () => (
+      <View style={styles.headerTitleContainer}>
+        {userImage ? (
+          <Image source={{ uri: userImage }} style={styles.headerAvatar} />
+        ) : (
+          <View style={styles.headerAvatarPlaceholder}>
+            <Text style={styles.headerAvatarText}>
+              {userName.charAt(0).toUpperCase()}
+            </Text>
+          </View>
+        )}
+        <View>
+          <Text style={styles.headerName}>{userName}</Text>
+          {userPseudo && <Text style={styles.headerPseudo}>@{userPseudo}</Text>}
+        </View>
+      </View>
+    ),
+    headerRight: () => (
+      <View style={styles.headerButtons}>
+        <TouchableOpacity onPress={onVideoCallPress} style={styles.headerButton}>
+          <Text style={styles.headerButtonText}>📹</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={onVoiceCallPress} style={styles.headerButton}>
+          <Text style={styles.headerButtonText}>📞</Text>
+        </TouchableOpacity>
+      </View>
+    ),
+    headerStyle: {
+      backgroundColor: '#075E54',
+    },
+    headerTintColor: 'white',
+  });
+
+  const unsubscribe = loadMessages();
+  return unsubscribe;
+}, [userName, userImage, userPseudo]);
 
   const loadMessages = () => {
     // Référence vers les messages dans Realtime Database
@@ -193,28 +219,6 @@ export default function Chat({ route, navigation }) {
     }
   };
 
-  const handleVoiceCall = () => {
-    Alert.alert(
-      'Appel vocal',
-      `Appeler ${userName} ?`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Appeler', onPress: () => console.log('Appel vocal initié') }
-      ]
-    );
-  };
-
-  const handleVideoCall = () => {
-    Alert.alert(
-      'Appel vidéo',
-      `Appel vidéo avec ${userName} ?`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Appeler', onPress: () => console.log('Appel vidéo initié') }
-      ]
-    );
-  };
-
   const openLocation = (latitude, longitude) => {
     const url = `https://www.google.com/maps?q=${latitude},${longitude}`;
     Linking.openURL(url);
@@ -229,36 +233,44 @@ export default function Chat({ route, navigation }) {
   const renderMessage = ({ item }) => {
     const isMyMessage = item.sender === currentUser.uid;
 
+    if (item.type === 'location') {
+      return (
+        <View style={[
+          styles.messageContainer,
+          isMyMessage ? styles.myMessage : styles.theirMessage
+        ]}>
+          <TouchableOpacity
+            style={[styles.locationBubble, isMyMessage ? styles.myBubble : styles.theirBubble]}
+            onPress={() => openLocation(item.location.latitude, item.location.longitude)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.locationIcon}>📍</Text>
+            <Text style={[styles.locationText, isMyMessage ? styles.myMessageText : styles.theirMessageText]}>
+              Voir la position
+            </Text>
+            <Text style={styles.messageTime}>{formatTime(item.time)}</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
     return (
       <View style={[
         styles.messageContainer,
         isMyMessage ? styles.myMessage : styles.theirMessage
       ]}>
-        {item.type === 'location' ? (
-          <TouchableOpacity
-            style={[styles.locationBubble, isMyMessage ? styles.myBubble : styles.theirBubble]}
-            onPress={() => openLocation(item.location.latitude, item.location.longitude)}
-          >
-            <Text style={styles.locationIcon}>📍</Text>
-            <Text style={[styles.locationText, isMyMessage ? styles.myMessageText : styles.theirMessageText]}>
-              Position partagée
-            </Text>
-            <Text style={styles.messageTime}>{formatTime(item.time)}</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={[
-            styles.messageBubble,
-            isMyMessage ? styles.myBubble : styles.theirBubble
+        <View style={[
+          styles.messageBubble,
+          isMyMessage ? styles.myBubble : styles.theirBubble
+        ]}>
+          <Text style={[
+            styles.messageText,
+            isMyMessage ? styles.myMessageText : styles.theirMessageText
           ]}>
-            <Text style={[
-              styles.messageText,
-              isMyMessage ? styles.myMessageText : styles.theirMessageText
-            ]}>
-              {item.msg}
-            </Text>
-            <Text style={styles.messageTime}>{formatTime(item.time)}</Text>
-          </View>
-        )}
+            {item.msg}
+          </Text>
+          <Text style={styles.messageTime}>{formatTime(item.time)}</Text>
+        </View>
       </View>
     );
   };
@@ -379,31 +391,44 @@ const styles = StyleSheet.create({
   },
   messagesList: {
     padding: 10,
+    paddingBottom: 20,
   },
   messageContainer: {
-    marginVertical: 5,
-    maxWidth: '80%',
+    marginVertical: 3,
+    maxWidth: '75%',
+    flexDirection: 'row',
   },
   myMessage: {
     alignSelf: 'flex-end',
+    marginLeft: '25%',
   },
   theirMessage: {
     alignSelf: 'flex-start',
+    marginRight: '25%',
   },
   messageBubble: {
-    padding: 10,
-    borderRadius: 10,
-    minWidth: 80,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    minWidth: 60,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
   },
   myBubble: {
     backgroundColor: '#DCF8C6',
+    borderBottomRightRadius: 2,
   },
   theirBubble: {
     backgroundColor: 'white',
+    borderBottomLeftRadius: 2,
   },
   messageText: {
     fontSize: 16,
-    marginBottom: 5,
+    lineHeight: 20,
+    marginBottom: 4,
   },
   myMessageText: {
     color: '#000',
@@ -412,76 +437,91 @@ const styles = StyleSheet.create({
     color: '#000',
   },
   messageTime: {
-    fontSize: 11,
-    color: '#666',
+    fontSize: 10,
+    color: '#667781',
     alignSelf: 'flex-end',
+    marginTop: 2,
   },
   locationBubble: {
-    padding: 15,
-    borderRadius: 10,
-    flexDirection: 'row',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 150,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
   },
   locationIcon: {
-    fontSize: 30,
-    marginRight: 10,
+    fontSize: 40,
+    marginBottom: 5,
   },
   locationText: {
     fontSize: 14,
-    flex: 1,
+    textAlign: 'center',
+    textDecorationLine: 'underline',
   },
   inputContainer: {
     flexDirection: 'row',
-    padding: 10,
-    backgroundColor: 'white',
+    padding: 8,
+    backgroundColor: '#f0f0f0',
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: '#ddd',
+    borderTopColor: '#e0e0e0',
   },
   iconButton: {
-    padding: 8,
+    padding: 10,
+    marginRight: 5,
   },
   iconButtonText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#128C7E',
+    fontSize: 24,
   },
   textInput: {
     flex: 1,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: 'white',
     borderRadius: 20,
     paddingHorizontal: 15,
-    paddingVertical: 8,
+    paddingVertical: 10,
     marginHorizontal: 5,
     maxHeight: 100,
     fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
   sendButton: {
     backgroundColor: '#25D366',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
+    marginLeft: 5,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
   },
   sendButtonDisabled: {
-    backgroundColor: '#ccc',
+    backgroundColor: '#a0a0a0',
+    elevation: 0,
   },
   sendButtonText: {
     color: 'white',
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
   },
   typingIndicator: {
     paddingHorizontal: 15,
-    paddingVertical: 8,
-    backgroundColor: '#f5f5f5',
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
+    paddingVertical: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
   },
   typingText: {
-    fontSize: 13,
-    color: '#666',
+    fontSize: 12,
+    color: '#25D366',
     fontStyle: 'italic',
   },
 });

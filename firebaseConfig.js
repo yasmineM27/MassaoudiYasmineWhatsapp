@@ -1,19 +1,13 @@
 // firebaseConfig.js
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getDatabase } from 'firebase/database';
-import { getAnalytics } from "firebase/analytics";
-// TODO: Remplacez ces valeurs par vos propres credentials Firebase
-// Allez sur https://console.firebase.google.com/
-// 1. Créez un nouveau projet ou sélectionnez un projet existant
-// 2. Allez dans Project Settings (icône d'engrenage)
-// 3. Faites défiler jusqu'à "Your apps" et cliquez sur l'icône Web (</>)
-// 4. Copiez la configuration firebaseConfig
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const firebaseConfig = {
- apiKey: "AIzaSyAhNSDx0sTqk6-dG-aJ6oJpNVzTvHdlo6E",
+  apiKey: "AIzaSyAhNSDx0sTqk6-dG-aJ6oJpNVzTvHdlo6E",
   authDomain: "whatsappyass.firebaseapp.com",
   databaseURL: "https://whatsappyass-default-rtdb.europe-west1.firebasedatabase.app",
   projectId: "whatsappyass",
@@ -25,10 +19,12 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
 
-// Initialize Firebase Authentication and get a reference to the service
-export const auth = getAuth(app);
+// Initialize Firebase Authentication with AsyncStorage persistence
+// This ensures auth state persists between app sessions
+export const auth = initializeAuth(app, {
+  persistence: getReactNativePersistence(AsyncStorage)
+});
 
 // Initialize Cloud Firestore and get a reference to the service
 export const db = getFirestore(app);
